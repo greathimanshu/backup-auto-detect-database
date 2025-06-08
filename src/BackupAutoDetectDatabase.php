@@ -3,14 +3,13 @@
 namespace GreatHimansh\BackupAutoDetectDatabase;
 
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Storage;
 use Google\Client as GoogleClient;
 use Google\Service\Drive as GoogleDrive;
 use Google\Service\Drive\DriveFile;
 
 class BackupAutoDetectDatabase extends Command
 {
-    protected $signature = 'backup:auto-upload';
+    protected $signature = 'backup:auto-upload {--dry-run : Run without uploading to Google Drive}';
     protected $description = 'Automatically backup ALL MySQL or MongoDB databases and upload to Google Drive';
 
     protected $driveParentFolderId;
@@ -20,9 +19,11 @@ class BackupAutoDetectDatabase extends Command
     public function __construct()
     {
         parent::__construct();
-        $this->driveParentFolderId = env('GOOGLE_DRIVE_FOLDER_ID');
-        $this->mysqlDumpPath = env('MYSQLDUMP_PATH', 'mysqldump');
-        $this->mongoDumpPath = env('MONGODUMP_PATH', 'mongodump');
+
+        // Use config instead of env (best practice)
+        $this->driveParentFolderId = config('backup-detect.drive_folder_id');
+        $this->mysqlDumpPath = config('backup-detect.mysqldump_path', 'mysqldump');
+        $this->mongoDumpPath = config('backup-detect.mongodump_path', 'mongodump');
     }
 
     public function handle()
@@ -49,8 +50,13 @@ class BackupAutoDetectDatabase extends Command
     {
         $this->info("🔍 Retrieving MySQL database list...");
 
+        if (!is_executable($this->mysqlDumpPath) && strpos($this->mysqlDumpPath, 'mysqldump') !== false) {
+            $this->warn("⚠️ mysqldump might not be found. Double-check path: {$this->mysqlDumpPath}");
+        }
+
         $connection = mysqli_connect($db['host'], $db['username'], $db['password']);
         $result = mysqli_query($connection, 'SHOW DATABASES');
+
         while ($row = mysqli_fetch_assoc($result)) {
             $database = $row['Database'];
             if (in_array($database, ['information_schema', 'performance_schema', 'mysql', 'sys'])) {
@@ -74,11 +80,13 @@ class BackupAutoDetectDatabase extends Command
             exec($command, $output, $returnVar);
 
             if ($returnVar === 0) {
-                $this->uploadToDrive($filepath, $filename, $database);
+                $this->uploadToDrive($filepath, $filename);
             } else {
                 $this->error("❌ Failed to backup $database");
             }
         }
+
+        mysqli_close($connection);
         return 0;
     }
 
@@ -86,8 +94,13 @@ class BackupAutoDetectDatabase extends Command
     {
         $this->info("🔍 Retrieving MongoDB database list...");
 
+        if (!is_executable($this->mongoDumpPath)) {
+            $this->warn("⚠️ mongodump might not be found. Double-check path: {$this->mongoDumpPath}");
+        }
+
         $uri = "mongodb://{$db['username']}:{$db['password']}@{$db['host']}:{$db['port']}";
-        $databases = json_decode(shell_exec("mongo --quiet --eval \"db.adminCommand('listDatabases')\" --username {$db['username']} --password {$db['password']} --host {$db['host']}"), true);
+        $json = shell_exec("mongo --quiet --eval \"db.adminCommand('listDatabases')\" --username {$db['username']} --password {$db['password']} --host {$db['host']}");
+        $databases = json_decode($json, true);
 
         foreach ($databases['databases'] as $database) {
             $dbName = $database['name'];
@@ -110,25 +123,29 @@ class BackupAutoDetectDatabase extends Command
             exec($command, $output, $returnVar);
 
             if ($returnVar === 0) {
-                $this->uploadToDrive($filepath, $filename, $dbName);
+                $this->uploadToDrive($filepath, $filename);
             } else {
                 $this->error("❌ Failed to backup $dbName");
             }
         }
+
         return 0;
     }
 
-    /**
-     * Uploads a file directly to the Google Drive root folder (or specified parent folder).
-     *
-     * @param string $filepath   Full path to the local file.
-     * @param string $filename   Name of the file to be saved in Drive.
-     * @return void
-     */
     protected function uploadToDrive($filepath, $filename)
     {
+        if (!file_exists($filepath)) {
+            $this->error("❌ File not found: $filepath");
+            return;
+        }
+
+        if ($this->option('dry-run')) {
+            $this->info("🛑 [Dry Run] Would upload: $filename");
+            return;
+        }
+
         try {
-            $this->info("☁️ Uploading $filename to Google Drive folder...");
+            $this->info("☁️ Uploading $filename to Google Drive...");
 
             $client = new GoogleClient();
             $client->setAuthConfig(storage_path('app/google/service-account.json'));
@@ -136,23 +153,6 @@ class BackupAutoDetectDatabase extends Command
 
             $driveService = new GoogleDrive($client);
 
-            // Step 1: Find existing backup files in the parent folder
-            // $response = $driveService->files->listFiles([
-            //     'q' => sprintf("'%s' in parents and name contains '-backup' and trashed = false", $this->driveParentFolderId),
-            //     'orderBy' => 'createdTime desc',
-            //     'fields' => 'files(id, name, createdTime)',
-            // ]);
-
-            // $existingBackups = $response->getFiles();
-
-            // Step 2: If more than 2 existing backups, delete the oldest
-            // if (count($existingBackups) >= 3) {
-            //     $oldest = array_slice($existingBackups, -1)[0];
-            //     $this->info("🗑️ Deleting oldest backup: {$oldest->name}");
-            //     $driveService->files->delete($oldest->id);
-            // }
-
-            // Step 3: Upload new backup
             $fileMetadata = new DriveFile([
                 'name' => $filename,
                 'parents' => [$this->driveParentFolderId],
@@ -167,7 +167,6 @@ class BackupAutoDetectDatabase extends Command
 
             $this->info("✅ Uploaded: $filename (ID: {$file->id})");
 
-            // Step 4: Delete local file
             unlink($filepath);
             $this->info("🗑️ Local backup file deleted.");
         } catch (\Exception $e) {
