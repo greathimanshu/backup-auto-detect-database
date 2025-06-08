@@ -52,9 +52,14 @@ storage/app/google/service-account.json
 Add these entries:
 
 ```env
-GOOGLE_DRIVE_FOLDER_ID=your_drive_folder_id_here
-MYSQLDUMP_PATH= your_mysql_dump_path_here
-MONGODUMP_PATH= your_mongodb_dump_path_here
+GOOGLE_DRIVE_FOLDER_ID=your_drive_folder_id_here        # ✅ Required — Google Drive folder ID
+DB_BACKUP_TYPE=mysql                                     # ✅ Required — mysql or mongodb
+
+MYSQLDUMP_PATH=your_mysql_dump_path_here                 # 🔁 Optional — full path if mysqldump is not in system PATH
+MONGODUMP_PATH=your_mongodb_dump_path_here               # 🔁 Optional — full path if mongodump is not in system PATH
+
+BACKUP_REPLACE=true                                      # 🔁 Optional — if true, will delete old backup before uploading new
+
 ```
 
 ---

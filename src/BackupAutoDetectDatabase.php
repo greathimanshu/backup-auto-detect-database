@@ -24,6 +24,7 @@ class BackupAutoDetectDatabase extends Command
         $this->driveParentFolderId = config('backup-detect.drive_folder_id');
         $this->mysqlDumpPath = config('backup-detect.mysqldump_path', 'mysqldump');
         $this->mongoDumpPath = config('backup-detect.mongodump_path', 'mongodump');
+        $this->backupReplace = config('backup-detect.backup_replace', true);
     }
 
     public function handle()
@@ -153,6 +154,19 @@ class BackupAutoDetectDatabase extends Command
 
             $driveService = new GoogleDrive($client);
 
+            if ($this->backupReplace) {
+                $this->info("🔄 BACKUP_REPLACE is true. Checking for existing files...");
+
+                $existingFiles = $driveService->files->listFiles([
+                    'q' => sprintf("name='%s' and '%s' in parents and trashed=false", $filename, $this->driveParentFolderId),
+                    'fields' => 'files(id, name)',
+                ]);
+
+                foreach ($existingFiles->getFiles() as $file) {
+                    $this->info("🗑️ Deleting existing file: {$file->getName()}");
+                    $driveService->files->delete($file->getId());
+                }
+            }
             $fileMetadata = new DriveFile([
                 'name' => $filename,
                 'parents' => [$this->driveParentFolderId],
