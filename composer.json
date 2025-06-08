@@ -1,0 +1,32 @@
+{
+    "name": "greathimansh/backup-auto-detect-database",
+    "description": "Backup MySQL and MongoDB databases and upload to Google Drive automatically.",
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Himanshu Kumar",
+            "email": "your@email.com"
+        }
+    ],
+    "require": {
+        "php": "^8.2",
+        "google/apiclient": "^2.18",
+        "spatie/db-dumper": "^3.8",
+        "illuminate/support": "^10 || ^11"
+    },
+    "autoload": {
+        "psr-4": {
+            "GreatHimansh\\BackupAutoDetectDatabase\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "GreatHimansh\\BackupAutoDetectDatabase\\BackupAutoDetectDatabaseServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
