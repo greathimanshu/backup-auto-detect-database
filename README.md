@@ -1,4 +1,3 @@
-
 # 📦 BackupAutoDetectDatabase
 
 Automatically backup **MySQL** or **MongoDB** databases and upload them to **Google Drive**, as a reusable Laravel package.
@@ -54,9 +53,8 @@ Add these entries:
 
 ```env
 GOOGLE_DRIVE_FOLDER_ID=your_drive_folder_id_here
-DB_BACKUP_FILENAME=all-databases-backup.sql
-DB_BACKUP_TYPE=mysql        # mysql or mongodb
-DB_BACKUP_MONGO_URI=        # required if type = mongodb
+MYSQLDUMP_PATH= your_mysql_dump_path_here
+MONGODUMP_PATH= your_mongodb_dump_path_here
 ```
 
 ---
