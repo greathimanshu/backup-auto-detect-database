@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Console\Commands;
+namespace GreatHimansh\BackupAutoDetectDatabase;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Storage;
